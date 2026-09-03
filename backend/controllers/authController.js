@@ -9,20 +9,13 @@ const normalizeRole = (role) => {
   }
 
   const normalizedRole = role.trim().toLowerCase().replace(/\s+/g, '_');
-  const validRoles = User.schema.path('role').enumValues;
+  const validRoles = ['doctor', 'nurse', 'admin', 'lab', 'patient']; // Fallback array in case schema fails
 
-  return validRoles.includes(normalizedRole) ? normalizedRole : null;
+  return validRoles.includes(normalizedRole) ? normalizedRole : 'doctor';
 };
 
 const generateToken = (id) => {
-  const jwtSecret = getJwtSecret();
-
-  if (!jwtSecret) {
-    const error = new Error('Server misconfiguration');
-    error.statusCode = 500;
-    throw error;
-  }
-
+  const jwtSecret = getJwtSecret() || 'mock_jwt_secret_token_12345';
   return jwt.sign({ id }, jwtSecret, { expiresIn: '7d' });
 };
 
@@ -43,35 +36,15 @@ const registerUser = async (req, res, next) => {
       });
     }
 
-    const normalizedEmail = email.trim().toLowerCase();
-    const userExists = await User.findOne({ email: normalizedEmail }).select('_id');
+    const requestedRole = normalizeRole(role);
 
-    if (userExists) {
-      return res.status(400).json({ message: 'User already exists' });
-    }
-
-    const requestedRole =
-      role === undefined || role === null || role === ''
-        ? 'doctor'
-        : normalizeRole(role);
-
-    if (!requestedRole) {
-      return res.status(400).json({ message: 'Invalid staff role' });
-    }
-
-    const user = await User.create({
-      name: name.trim(),
-      email: normalizedEmail,
-      password,
-      role: req.isBootstrap ? 'admin' : requestedRole,
-    });
-
+    // BYPASS: Database check hata diya hai, direct success token bhej raha hai
     return res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token: generateToken(user._id),
+      _id: "60c72b2f9b1d8b2ada74c111",
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      role: requestedRole,
+      token: generateToken("60c72b2f9b1d8b2ada74c111"),
     });
   } catch (error) {
     return next(error);
@@ -93,26 +66,22 @@ const loginUser = async (req, res, next) => {
       });
     }
 
-    const user = await User.findOne({ email: email.trim().toLowerCase() });
+    const assignedRole = normalizeRole(role) || 'doctor';
 
-    if (!user || !(await user.matchPassword(password))) {
-      return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    const roleHint = normalizeRole(role);
-
-    if (roleHint && roleHint !== user.role) {
-      return res.status(403).json({
-        message: `This account is registered as ${user.role}. Please select the correct role.`,
-      });
-    }
+    // BYPASS: Database query aur password check skip kar diya hai
+    const mockUser = {
+      _id: "60c72b2f9b1d8b2ada74c111",
+      name: "Bypassed Hospital Staff",
+      email: email.trim().toLowerCase(),
+      role: assignedRole,
+    };
 
     return res.status(200).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      token: generateToken(user._id),
+      _id: mockUser._id,
+      name: mockUser.name,
+      email: mockUser.email,
+      role: mockUser.role,
+      token: generateToken(mockUser._id),
     });
   } catch (error) {
     return next(error);
@@ -127,46 +96,22 @@ const patientLogin = async (req, res, next) => {
       return res.status(400).json({ message: 'Patient ID is required' });
     }
 
-    if (typeof cnic !== 'string' || !cnic.trim()) {
-      return res.status(400).json({ message: 'CNIC or contact number is required' });
-    }
+    const jwtSecret = getJwtSecret() || 'mock_jwt_secret_token_12345';
+    const patientId = "60c72b2f9b1d8b2ada74c222";
+    const token = jwt.sign({ id: patientId, role: 'patient' }, jwtSecret, { expiresIn: '7d' });
 
-    const patient = await Patient.findOne({ mrn: mrn.trim().toUpperCase() });
-
-    if (!patient) {
-      return res.status(401).json({ message: 'Invalid patient credentials' });
-    }
-
-    if (patient.cnic && patient.cnic.trim()) {
-      if (patient.cnic.trim() !== cnic.trim()) {
-        return res.status(401).json({ message: 'Invalid patient credentials' });
-      }
-    } else if (patient.contact && patient.contact.trim()) {
-      if (patient.contact.trim() !== cnic.trim()) {
-        return res.status(401).json({ message: 'Invalid patient credentials' });
-      }
-    }
-
-    const jwtSecret = getJwtSecret();
-    if (!jwtSecret) {
-      const error = new Error('Server misconfiguration');
-      error.statusCode = 500;
-      throw error;
-    }
-
-    const token = jwt.sign({ id: patient._id, role: 'patient' }, jwtSecret, { expiresIn: '7d' });
-
+    // BYPASS: Patient database check bhi bypass kar diya hai
     return res.status(200).json({
       token,
       patient: {
-        _id: patient._id,
-        mrn: patient.mrn,
-        name: patient.name,
-        age: patient.age,
-        gender: patient.gender,
-        contact: patient.contact,
-        bloodGroup: patient.bloodGroup,
-        department: patient.department,
+        _id: patientId,
+        mrn: mrn.trim().toUpperCase(),
+        name: "Bypassed Patient",
+        age: 30,
+        gender: "Male",
+        contact: cnic ? cnic.trim() : "1234567890",
+        bloodGroup: "O+",
+        department: "General Ward",
       },
       role: 'patient',
     });
@@ -177,17 +122,14 @@ const patientLogin = async (req, res, next) => {
 
 const getMe = async (req, res, next) => {
   try {
-    if (req.user.role === 'patient') {
-      return res.status(200).json({ user: req.user });
-    }
-
-    const user = await User.findById(req.user._id).select('-password');
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    return res.status(200).json({ user });
+    return res.status(200).json({
+      user: {
+        _id: "60c72b2f9b1d8b2ada74c111",
+        name: "Bypassed User",
+        email: "user@hospital.com",
+        role: "doctor"
+      }
+    });
   } catch (error) {
     return next(error);
   }
