@@ -37,12 +37,17 @@ export async function apiRequest(path, options = {}) {
         localStorage.removeItem('mediai_user');
         window.location.href = '/login';
       }
-      throw new Error(data.message || 'Request failed');
+      
+      const error = new Error(data.message || `Request failed with status ${response.status}`);
+      error.status = response.status;
+      throw error;
     }
 
     return data;
   } catch (error) {
-    throw new Error(error.message || 'Network error occurred');
+    // Agar 405, 404 ya network error ho, toh console par warning dikhao taake app crash na ho
+    console.warn(`API Warning [${path}]:`, error.message);
+    throw error;
   }
 }
 
