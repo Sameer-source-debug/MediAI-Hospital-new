@@ -52,20 +52,10 @@ app.get('/', (req, res) => {
   });
 });
 
+// NON-BLOCKING DB MIDDLEWARE (Login ko block nahi karega)
 app.use('/api', async (req, res, next) => {
-  try {
-    const dbCheck = Promise.race([
-      connectDB(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), 5000))
-    ]);
-    await dbCheck;
-    return next();
-  } catch (error) {
-    console.error('Database unavailable:', error.message);
-    return res.status(503).json({
-      message: 'Database connection unavailable. Please try again.',
-    });
-  }
+  connectDB().catch(err => console.log('Background DB Warning:', err.message));
+  return next();
 });
 
 app.use('/api/auth', authRoutes);
@@ -88,3 +78,4 @@ if (require.main === module) {
   app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+}
